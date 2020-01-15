@@ -6,6 +6,15 @@ __VERSION__ = '2020.01.15'
 __AUTHOR__ = 'byeongal'
 __CONTACT__ = 'byeongal@kookmin.ac.kr'
 
+def help():
+    print("Invincea Version {}".format(__VERSION__))
+    print("Train Mode")
+    print("python Train.py")
+    print("--train=<train.csv> : Csv file path to train.")
+    print("--model=<model_path> : Path to model to save or load (Default : model.ckpt)")
+    print("--batch_size=<number_of_batch_size> : (Default : 128)")
+    print("--epochs=<number_of_epochs> : (Default : 100)")
+
 class DataSequence(Sequence):
     def __init__(self, x_set, y_set, batch_size, shuffle=True):
         self.x = x_set
