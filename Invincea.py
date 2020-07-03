@@ -1,9 +1,16 @@
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Embedding, Conv1D, MaxPooling1D, GlobalAveragePooling1D, Input
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-def Invincea():
-    input_layer = Input((1025, ))
-    x = Dense(1025, activation='relu')(input_layer)
-    x = Dense(1025, activation='relu')(x)
-    output_layer = Dense(1, activation='sigmoid')(x)
-    return Model(input_layer, output_layer)
+
+class Invincea(nn.Module):
+    def __init__(self):
+        super(Invincea, self).__init__()
+        self.d1 = nn.Linear(1025, 1025)
+        self.d2 = nn.Linear(1025, 1025)
+        self.d3 = nn.Linear(1025, 1)
+
+    def forward(self, x):
+        x = F.relu(self.d1(x))
+        x = F.relu(self.d2(x))
+        return torch.sigmoid(self.d3(x))

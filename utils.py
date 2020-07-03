@@ -1,6 +1,8 @@
 import pickle
-import numpy as np
-from tensorflow.keras.utils import Sequence
+import torch
+
+import pandas as pd
+from torch.utils.data import Dataset, DataLoader
 
 __VERSION__ = '2020.01.15'
 __AUTHOR__ = 'byeongal'
@@ -15,33 +17,28 @@ def help():
     print("--batch_size=<number_of_batch_size> : (Default : 128)")
     print("--epochs=<number_of_epochs> : (Default : 100)")
 
-class DataSequence(Sequence):
-    def __init__(self, x_set, y_set, batch_size, shuffle=True):
-        self.x = x_set
-        self.y = y_set
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.on_epoch_end()
-
-    def on_epoch_end(self):
-        self.indexes = np.arange(len(self.x))
-        if self.shuffle == True:
-            np.random.shuffle(self.indexes)
-
-    def __data_generation(self, fn_list):
-        vector_array = []
-        for fn in fn_list:
-            with open(fn, 'rb') as f:
-                vector_array.append(pickle.load(f))
-        return np.array(vector_array)
-
-    def __len__(self):
-        return int(np.ceil(len(self.x) / self.batch_size))
+class InvinceaDataset(Dataset):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
 
     def __getitem__(self, index):
-        indexes = self.indexes[index * self.batch_size:(index + 1) * self.batch_size]
+        with open(self.x[index], 'rb') as f:
+            x = pickle.load(f)
+            x = torch.tensor(x, dtype=torch.float32)
+        y = torch.tensor([self.y[index]], dtype=torch.float32)
+        return x, y
 
-        batch_x = self.x[indexes]
-        batch_y = self.y[indexes]
+    def __len__(self):
+        return len(self.x)
 
-        return self.__data_generation(batch_x), batch_y
+
+def get_data_loader(csv_path, batch_size = 256, shuffle = True, test_mode = False):
+    df = pd.read_csv(csv_path, header=None)
+    file_path_list, labels = df[0].values, df[1].values
+    dataset = InvinceaDataset(file_path_list, labels)
+    dataloader = DataLoader(dataset, batch_size, shuffle = shuffle)
+    if test_mode:
+        return dataloader, file_path_list
+    else:
+        return dataloader

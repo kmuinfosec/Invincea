@@ -2,66 +2,58 @@ import os
 import sys
 import getopt
 
-import pandas as pd
-import tensorflow as tf
-from tensorflow.keras.utils import multi_gpu_model
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+import torch
+import torch.optim as optim
+import torch.functional as F
+from tqdm import tqdm
 
 import utils
 import Invincea
 
+USE_CUDA = torch.cuda.is_available()
+DEVICE = torch.device("cuda" if USE_CUDA else "cpu")
+
+def train_model(model, epochs, train_loader, optimizer):
+    model.train()
+    for epoch in range(epochs):
+        total_loss = 0
+        total_correct = 0
+        total = 0
+        with tqdm(train_loader, desc='Train Epoch #{}'.format(epoch)) as t:
+            for data, target in t:
+                data, target = data.to(DEVICE), target.to(DEVICE)
+                optimizer.zero_grad()
+                output = model(data)
+                optimizer.zero_grad()
+                loss = F.binary_cross_entropy(output, target)
+                loss.backward()
+                optimizer.step()
+                total += len(data)
+                total_correct += output.round().eq(target).sum().item()
+                total_loss += loss.item() * len(data)
+                t.set_postfix(loss='{:.4f}'.format(total_loss / total), accuracy='{:.4f}'.format(total_correct / total))
+
 def train(train_csv_path, model_path, batch_size, epochs):
     try:
-        train_df = pd.read_csv(train_csv_path, header=None)
-        train_data, train_label = train_df[0].values, train_df[1].values
+        train_loader = utils.get_data_loader(train_csv_path, batch_size, True)
     except Exception as e:
         print(e)
         sys.exit(1)
-    model = Invincea.Invincea()
+    model = Invincea.Invincea().to(DEVICE)
+    optimizer = optim.Adam(model.parameters())
     if model_path == None:
-        model_path = 'model.ckpt'
+        model_path = 'model.dat'
     if os.path.isfile(model_path):
-        model.load_weights(model_path)
-
-    ear = EarlyStopping(monitor='acc', patience=4)
-    mcp = ModelCheckpoint(model_path,
-                          monitor="acc",
-                          save_best_only=True,
-                          save_weights_only=False)
-    train_generator = utils.DataSequence(train_data, train_label, batch_size, True)
-    number_of_gpu = len(tf.config.experimental.list_physical_devices('GPU'))
-    if number_of_gpu >= 2:
-        parallel_model = multi_gpu_model(model, gpus=number_of_gpu)
-        parallel_model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['acc'])
-        try:
-            parallel_model.fit_generator(
-                train_generator,
-                epochs=epochs,
-                callbacks=[ear, mcp],
-                workers=os.cpu_count(),
-                use_multiprocessing=True,
-                verbose=1,
-            )
-        except KeyboardInterrupt:
-            model.save(model_path)
-        model.save(model_path)
-    else:
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['acc'])
-        model.fit_generator(
-            train_generator,
-            epochs=epochs,
-            callbacks=[ear, mcp],
-            workers=os.cpu_count(),
-            use_multiprocessing=True,
-            verbose=1,
-        )
+        model.load_state_dict(torch.load(model_path))
+    train_loader(model, epochs, train_loader, optimizer)
+    torch.save(model.state_dict(), model_path)
 
 def main(argv):
     try:
         train_csv_path = None
         model_path = None
         batch_size = 128
-        epochs = 100
+        epochs = 10
         optlist, args = getopt.getopt(argv[1:], '', ['help', 'train=', 'model=', 'batch_size=', 'epochs=',])
         for opt, arg in optlist:
             if opt == '--help':
